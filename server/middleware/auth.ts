@@ -1,5 +1,4 @@
 import { Buffer } from "node:buffer";
-import { auth } from "../../src/lib/auth/server";
 import { readRawBody, getRequestURL, getRequestHeaders, getMethod } from "h3";
 
 export default async function authMiddleware(
@@ -11,6 +10,8 @@ export default async function authMiddleware(
   if (!url.pathname.startsWith("/api/auth")) {
     return next();
   }
+
+  const { auth } = await import("../../src/lib/auth/server");
 
   const method = getMethod(event, "GET").toUpperCase();
   const rawHeaders = getRequestHeaders(event);
