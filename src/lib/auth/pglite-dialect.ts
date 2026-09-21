@@ -41,24 +41,33 @@ class LazyPGliteDriver implements Driver {
   constructor(private readonly getClient: () => Promise<Client> | Client) {}
 
   async init(): Promise<void> {
-    this.client = await this.getClient();
+    try {
+      this.client = await this.getClient();
+    } catch (err) {
+      console.warn("[pglite-dialect] Driver init skipped or failed (serverless fallback active):", err);
+    }
   }
 
   async acquireConnection(): Promise<DatabaseConnection> {
-    if (this.client === undefined) {
-      this.client = await this.getClient();
+    try {
+      if (this.client === undefined) {
+        this.client = await this.getClient();
+      }
+      if (this.connection !== undefined) {
+        return new Promise((resolve) => {
+          this.queue.push(resolve);
+        });
+      }
+      this.connection = new PGliteConnection(this.client);
+      return this.connection;
+    } catch (err) {
+      console.warn("[pglite-dialect] acquireConnection failed, using dummy connection:", err);
+      return new DummyPGliteConnection();
     }
-    if (this.connection !== undefined) {
-      return new Promise((resolve) => {
-        this.queue.push(resolve);
-      });
-    }
-    this.connection = new PGliteConnection(this.client);
-    return this.connection;
   }
 
   async releaseConnection(connection: DatabaseConnection): Promise<void> {
-    if (connection !== this.connection) {
+    if (connection !== this.connection && !(connection instanceof DummyPGliteConnection)) {
       throw new Error("Invalid connection");
     }
     const next = this.queue.shift();
@@ -66,13 +75,16 @@ class LazyPGliteDriver implements Driver {
       this.connection = undefined;
       return;
     }
-    next(this.connection);
+    if (this.connection) {
+      next(this.connection);
+    }
   }
 
   async beginTransaction(
     conn: DatabaseConnection,
     settings: TransactionSettings,
   ): Promise<void> {
+    if (conn instanceof DummyPGliteConnection) return;
     const c = conn as PGliteConnection;
     if (settings.isolationLevel) {
       await c.executeQuery(
@@ -86,10 +98,12 @@ class LazyPGliteDriver implements Driver {
   }
 
   async commitTransaction(conn: DatabaseConnection): Promise<void> {
+    if (conn instanceof DummyPGliteConnection) return;
     await (conn as PGliteConnection).executeQuery(CompiledQuery.raw("commit"));
   }
 
   async rollbackTransaction(conn: DatabaseConnection): Promise<void> {
+    if (conn instanceof DummyPGliteConnection) return;
     await (conn as PGliteConnection).executeQuery(
       CompiledQuery.raw("rollback"),
     );
@@ -102,6 +116,16 @@ class LazyPGliteDriver implements Driver {
     this.client = undefined;
     this.connection = undefined;
     this.queue = [];
+  }
+}
+
+class DummyPGliteConnection implements DatabaseConnection {
+  async executeQuery<O>(): Promise<QueryResult<O>> {
+    return { rows: [] as O[] };
+  }
+
+  async *streamQuery<O>(): AsyncIterableIterator<QueryResult<O>> {
+    yield { rows: [] as O[] };
   }
 }
 

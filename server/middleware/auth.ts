@@ -11,8 +11,6 @@ export default async function authMiddleware(
     return next();
   }
 
-  const { auth } = await import("../../src/lib/auth/server");
-
   const method = getMethod(event, "GET").toUpperCase();
   const rawHeaders = getRequestHeaders(event);
   const headers = new Headers();
@@ -53,6 +51,18 @@ export default async function authMiddleware(
     duplex: bodyBuffer ? "half" : undefined,
   });
 
-  return auth.handler(request);
+  try {
+    const { auth } = await import("../../src/lib/auth/server");
+    return await auth.handler(request);
+  } catch (err) {
+    console.warn("[authMiddleware] Error executing auth handler:", err);
+    return new Response(
+      JSON.stringify({ error: "Auth service unavailable on serverless fallback" }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 }
 
