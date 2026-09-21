@@ -30,24 +30,6 @@ export function generatePdfQrSvg(code: string): string {
   );
 }
 
-export function slugifyParticipantName(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9_-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
-export function getCertificatePdfFilename(data: CertificatePdfData): string {
-  const code = data.certificateCode.trim().toUpperCase().replace(/\s+/g, "");
-  const name = data.participantName
-    ? data.participantName
-    : `${data.firstName || ""} ${data.lastName || ""}`.trim();
-  const safeName = slugifyParticipantName(name);
-  return `Certificado_${code}_${safeName}.pdf`;
-}
-
 export function formatCourseTitleLines(course: string): { line1: string; line2?: string } {
   const clean = course.trim();
   if (/python con an[aá]lisis de datos y vibe coding/i.test(clean)) {

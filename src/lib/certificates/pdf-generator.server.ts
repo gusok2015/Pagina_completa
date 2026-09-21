@@ -1,4 +1,4 @@
-import type { Browser } from "playwright";
+import { chromium, type Browser } from "playwright";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -49,7 +49,6 @@ export function getCertificatePdfFilename(data: CertificatePdfData): string {
 }
 
 async function launchBrowser(): Promise<Browser> {
-  const { chromium } = await import("playwright");
   try {
     return await chromium.launch({ channel: "chrome" });
   } catch {

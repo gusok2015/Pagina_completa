@@ -181,19 +181,8 @@ export function Founders() {
         <p className="font-mono text-xs tracking-label text-muted">03 — Fundadores</p>
       </div>
       <div className="grid border-t border-border md:grid-cols-2">
-        <FounderBlock
-          initials="C.R."
-          name="Carolina Riveros"
-          role="Cofundadora"
-          image="/team/carolina-riveros.png"
-        />
-        <FounderBlock
-          initials="G.R."
-          name="Gustavo Rojas"
-          role="Cofundador"
-          image="/team/gustavo-rojas.png"
-          last
-        />
+        <FounderBlock initials="C.R." name="Carolina Riveros" role="Cofundadora" />
+        <FounderBlock initials="G.R." name="Gustavo Rojas" role="Cofundador" last />
       </div>
     </section>
   );
@@ -203,38 +192,23 @@ function FounderBlock({
   initials,
   name,
   role,
-  image,
   last,
 }: {
   initials: string;
   name: string;
   role: string;
-  image?: string;
   last?: boolean;
 }) {
   return (
     <article
       className={cnBorder(
-        "px-5 py-10 md:px-8 md:py-14",
+        "px-5 py-12 md:px-8 md:py-16",
         !last && "border-b border-border md:border-b-0 md:border-r",
       )}
     >
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex flex-col justify-between">
-          <p className="font-display text-stat italic text-primary">{initials}</p>
-          <h3 className="mt-8 font-display text-3xl md:text-4xl">{name}</h3>
-          <p className="mt-2 font-mono text-xs tracking-label text-muted">{role}</p>
-        </div>
-        {image && (
-          <div className="relative h-32 w-32 sm:h-36 sm:w-36 md:h-44 md:w-44 shrink-0 overflow-hidden border border-border bg-surface shadow-2xl rounded-sm">
-            <img
-              src={image}
-              alt={name}
-              className="h-full w-full object-cover object-top transition-transform duration-500 hover:scale-105"
-            />
-          </div>
-        )}
-      </div>
+      <p className="font-display text-stat italic text-primary">{initials}</p>
+      <h3 className="mt-8 font-display text-3xl">{name}</h3>
+      <p className="mt-2 font-mono text-xs tracking-label text-muted">{role}</p>
     </article>
   );
 }

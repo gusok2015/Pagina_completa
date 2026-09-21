@@ -4,8 +4,8 @@ import {
   getAdminCertificates,
   revokeCertificate,
   reactivateCertificate,
+  resetCertificate,
   updateCertificateDni,
-  resetCertificateVerifications,
   downloadCertificatePdfServerFn,
   downloadBatchCertificatesZipServerFn,
   formatArgentinaDateTime,
@@ -154,22 +154,21 @@ function AdminCertificatesPage() {
     }
   };
 
-  const handleResetVerifications = async (code: string) => {
+  const handleReset = async (code: string) => {
     if (
       !confirm(
-        `¿Querés reiniciar las consultas del certificado ${code}?\n\nVolverá a estado EMITIDO y su contador de consultas quedará en 0.`,
+        `¿Confirmás que querés reiniciar el certificado ${code}?\n\nEsto dejará el certificado en estado EMITIDO y volverá a 0 las consultas registradas.`,
       )
-    ) {
+    )
       return;
-    }
     setIsProcessing(true);
     try {
-      await resetCertificateVerifications({
+      await resetCertificate({
         data: { code },
       });
       await router.invalidate();
     } catch (err) {
-      console.error("Error al reiniciar consultas:", err);
+      console.error("Error al reiniciar certificado:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -491,16 +490,6 @@ function AdminCertificatesPage() {
                         >
                           ↗
                         </a>
-                        {(cert.verificationCount > 0 || cert.status === "verified") && (
-                          <button
-                            disabled={isProcessing}
-                            onClick={() => handleResetVerifications(cert.code)}
-                            className="text-amber-400/90 hover:text-amber-300 transition-colors font-medium"
-                            title="Reiniciar a 0 consultas y cambiar a EMITIDO"
-                          >
-                            REINICIAR (0)
-                          </button>
-                        )}
                         {cert.status === "revoked" ? (
                           <button
                             disabled={isProcessing}
@@ -521,6 +510,14 @@ function AdminCertificatesPage() {
                             REVOCAR
                           </button>
                         )}
+                        <button
+                          disabled={isProcessing}
+                          onClick={() => handleReset(cert.code)}
+                          className="text-amber-400/90 hover:text-amber-300 transition-colors font-medium"
+                          title="Volver certificado a EMITIDO y 0 consultas"
+                        >
+                          REINICIAR
+                        </button>
                       </div>
                     </td>
                   </tr>

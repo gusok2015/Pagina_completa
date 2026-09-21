@@ -4,8 +4,8 @@ import {
   getAdminCertificateDetail,
   revokeCertificate,
   reactivateCertificate,
+  resetCertificate,
   updateCertificateDni,
-  resetCertificateVerifications,
   downloadCertificatePdfServerFn,
   formatArgentinaDateTime,
   formatArgentinaDate,
@@ -122,22 +122,21 @@ function AdminCertificateDetailPage() {
     }
   };
 
-  const handleResetVerifications = async () => {
+  const handleReset = async () => {
     if (
       !confirm(
-        `¿Querés reiniciar las consultas del certificado ${certificate.code}?\n\nVolverá a estado EMITIDO y su contador de consultas quedará en 0.`,
+        `¿Confirmás que querés reiniciar el certificado ${certificate.code}?\n\nEsto dejará el certificado en estado EMITIDO y volverá a 0 las consultas registradas.`,
       )
-    ) {
+    )
       return;
-    }
     setIsProcessing(true);
     try {
-      await resetCertificateVerifications({
+      await resetCertificate({
         data: { code: certificate.code },
       });
       await router.invalidate();
     } catch (err) {
-      console.error("Error al reiniciar consultas:", err);
+      console.error("Error al reiniciar certificado:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -228,16 +227,6 @@ function AdminCertificateDetailPage() {
             <span>IMPRIMIR / VECTOR</span>
           </button>
 
-          {(certificate.verificationCount > 0 || certificate.status === "verified") && (
-            <button
-              disabled={isProcessing || isGeneratingPdf}
-              onClick={handleResetVerifications}
-              className="bg-amber-500/10 border border-amber-500/30 px-5 py-2.5 font-mono text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
-            >
-              REINICIAR CONSULTAS (0)
-            </button>
-          )}
-
           {certificate.status === "revoked" ? (
             <button
               disabled={isProcessing || isGeneratingPdf}
@@ -258,6 +247,15 @@ function AdminCertificateDetailPage() {
               REVOCAR CERTIFICADO
             </button>
           )}
+
+          <button
+            disabled={isProcessing || isGeneratingPdf}
+            onClick={handleReset}
+            className="bg-amber-500/10 border border-amber-500/30 px-5 py-2.5 font-mono text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+            title="Volver a estado EMITIDO y fijar consultas en 0"
+          >
+            REINICIAR CERTIFICADO
+          </button>
         </div>
       </div>
 

@@ -740,6 +740,63 @@ export const reactivateCertificate = createServerFn({ method: "POST" })
   });
 
 /**
+ * Reiniciar un certificado desde el panel de administración:
+ * Resetea el estado a 'issued', vuelve el contador de consultas a 0,
+ * limpia fechas de verificación y elimina el historial de consultas.
+ */
+export const resetCertificate = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({
+    code: normalizeCertificateCode(input.code),
+  }))
+  .handler(async ({ data }): Promise<{ success: boolean; message: string }> => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    try {
+      const { getSql } = await import("./db");
+      const sql = await getSql();
+
+      await sql`
+        delete from certificate_verifications
+        where certificate_code = ${data.code}
+      `;
+
+      await sql`
+        update certificates
+        set 
+          status = 'issued',
+          verification_count = 0,
+          first_verified_at = null,
+          last_verified_at = null,
+          revoked_at = null,
+          revoked_reason = null,
+          updated_at = now()
+        where code = ${data.code}
+      `;
+    } catch (err) {
+      console.warn("DB error resetting certificate, updating fallback memory:", err);
+    }
+
+    if (INITIAL_CERTIFICATES[data.code]) {
+      const now = new Date().toISOString();
+      INITIAL_CERTIFICATES[data.code].status = "issued";
+      INITIAL_CERTIFICATES[data.code].verificationCount = 0;
+      INITIAL_CERTIFICATES[data.code].firstVerifiedAt = null;
+      INITIAL_CERTIFICATES[data.code].lastVerifiedAt = null;
+      INITIAL_CERTIFICATES[data.code].revokedAt = null;
+      INITIAL_CERTIFICATES[data.code].revokedReason = null;
+      INITIAL_CERTIFICATES[data.code].updatedAt = now;
+    }
+
+    if (IN_MEMORY_VERIFICATIONS[data.code]) {
+      IN_MEMORY_VERIFICATIONS[data.code] = [];
+    }
+
+    return { success: true, message: `Certificado ${data.code} reiniciado correctamente.` };
+  });
+
+
+/**
  * Actualizar o guardar el DNI de un alumno desde el panel de administración.
  */
 export const updateCertificateDni = createServerFn({ method: "POST" })
@@ -772,54 +829,6 @@ export const updateCertificateDni = createServerFn({ method: "POST" })
     }
 
     return { success: true, dni: data.dni };
-  });
-
-/**
- * Reiniciar un certificado a estado 'issued' (emitido) y restablecer su contador de consultas a 0.
- * Limpia first_verified_at, last_verified_at y elimina el historial de consultas de verificación.
- */
-export const resetCertificateVerifications = createServerFn({ method: "POST" })
-  .validator((input: { code: string }) => ({
-    code: normalizeCertificateCode(input.code),
-  }))
-  .handler(async ({ data }): Promise<{ success: boolean; message: string }> => {
-    const { requireAdminSession } = await import("./auth/verify.server");
-    await requireAdminSession();
-
-    try {
-      const { getSql } = await import("./db");
-      const sql = await getSql();
-
-      await sql`
-        delete from certificate_verifications
-        where certificate_code = ${data.code}
-      `;
-
-      await sql`
-        update certificates
-        set 
-          status = 'issued',
-          verification_count = 0,
-          first_verified_at = null,
-          last_verified_at = null,
-          updated_at = now()
-        where code = ${data.code}
-      `;
-    } catch (err) {
-      console.warn("DB error when resetting verifications, updating fallback memory:", err);
-    }
-
-    if (INITIAL_CERTIFICATES[data.code]) {
-      const item = INITIAL_CERTIFICATES[data.code];
-      item.status = "issued";
-      item.verificationCount = 0;
-      item.firstVerifiedAt = null;
-      item.lastVerifiedAt = null;
-      item.updatedAt = new Date().toISOString();
-    }
-    delete IN_MEMORY_VERIFICATIONS[data.code];
-
-    return { success: true, message: `Certificado ${data.code} restablecido a EMITIDO con 0 consultas.` };
   });
 
 /**
@@ -905,36 +914,19 @@ export const downloadCertificatePdfServerFn = createServerFn({ method: "POST" })
       throw new Error(`Certificado ${data.code} no encontrado.`);
     }
 
-    try {
-      const { generateSingleCertificatePdf, renderCompleteCertificateHtml } = await import(
-        "./certificates/pdf-generator.server"
-      );
+    const { generateSingleCertificatePdf, renderCompleteCertificateHtml } = await import(
+      "./certificates/pdf-generator.server"
+    );
 
-      try {
-        const { buffer, filename } = await generateSingleCertificatePdf(cert);
-        return {
-          base64: buffer.toString("base64"),
-          filename,
-        };
-      } catch (browserError) {
-        console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
-        const { html, filename } = renderCompleteCertificateHtml(cert);
-        return {
-          html,
-          filename,
-          fallbackToClient: true,
-        };
-      }
-    } catch (generatorImportError) {
-      console.warn("No se pudo cargar generador server, usando fallback de plantilla HTML:", generatorImportError);
-      const { renderIsolatedCertificateHtml, generatePdfQrSvg, getCertificatePdfFilename } = await import(
-        "./certificates/pdf-template.ts"
-      );
-      const { TEMPLATE_BG_BASE64 } = await import("./certificates/template-bg-base64.ts");
-      const bgImageDataUri = TEMPLATE_BG_BASE64 ? `data:image/png;base64,${TEMPLATE_BG_BASE64}` : "";
-      const qrSvg = generatePdfQrSvg(cert.certificateCode);
-      const html = renderIsolatedCertificateHtml(cert, { bgImageDataUri, qrSvg });
-      const filename = getCertificatePdfFilename(cert);
+    try {
+      const { buffer, filename } = await generateSingleCertificatePdf(cert);
+      return {
+        base64: buffer.toString("base64"),
+        filename,
+      };
+    } catch (browserError) {
+      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+      const { html, filename } = renderCompleteCertificateHtml(cert);
       return {
         html,
         filename,
@@ -970,42 +962,20 @@ export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "PO
       throw new Error("No se encontraron certificados válidos para generar.");
     }
 
-    try {
-      const { generateCertificatesZip, renderCompleteCertificateHtml } = await import(
-        "./certificates/pdf-generator.server"
-      );
+    const { generateCertificatesZip, renderCompleteCertificateHtml } = await import(
+      "./certificates/pdf-generator.server"
+    );
 
-      try {
-        const { buffer, filename } = await generateCertificatesZip(certList);
-        return {
-          base64: buffer.toString("base64"),
-          filename,
-          count: certList.length,
-        };
-      } catch (browserError) {
-        console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
-        const items = certList.map((c) => renderCompleteCertificateHtml(c));
-        const dateStr = new Date().toISOString().slice(0, 10);
-        return {
-          filename: `Certificados_Breakpoint_${dateStr}.zip`,
-          count: certList.length,
-          fallbackToClient: true,
-          items,
-        };
-      }
-    } catch (generatorImportError) {
-      console.warn("No se pudo cargar generador de ZIP server, usando fallback cliente:", generatorImportError);
-      const { renderIsolatedCertificateHtml, generatePdfQrSvg, getCertificatePdfFilename } = await import(
-        "./certificates/pdf-template.ts"
-      );
-      const { TEMPLATE_BG_BASE64 } = await import("./certificates/template-bg-base64.ts");
-      const bgImageDataUri = TEMPLATE_BG_BASE64 ? `data:image/png;base64,${TEMPLATE_BG_BASE64}` : "";
-      const items = certList.map((c) => {
-        const qrSvg = generatePdfQrSvg(c.certificateCode);
-        const html = renderIsolatedCertificateHtml(c, { bgImageDataUri, qrSvg });
-        const filename = getCertificatePdfFilename(c);
-        return { html, filename };
-      });
+    try {
+      const { buffer, filename } = await generateCertificatesZip(certList);
+      return {
+        base64: buffer.toString("base64"),
+        filename,
+        count: certList.length,
+      };
+    } catch (browserError) {
+      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+      const items = certList.map((c) => renderCompleteCertificateHtml(c));
       const dateStr = new Date().toISOString().slice(0, 10);
       return {
         filename: `Certificados_Breakpoint_${dateStr}.zip`,

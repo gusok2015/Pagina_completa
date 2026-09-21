@@ -152,24 +152,19 @@ async function createPgliteSql(): Promise<Sql> {
   // One in-memory instance per process, shared across HMR module instances, so
   // data survives source edits (it resets on dev-server restart).
   globalRef.__pgliteInstance__ ??= (async () => {
-    try {
-      const { PGlite } = await import("@electric-sql/pglite");
-      const pg = new PGlite({
-        parsers: {
-          [OID_INT8]: Number,
-          [OID_DATE]: identity,
-          [OID_INTERVAL]: identity,
-        },
-      });
-      await pg.waitReady;
-      await pg.exec(
-        "create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())",
-      );
-      return pg;
-    } catch (err) {
-      console.warn("[db] PGLite unavailable in this environment (falling back to memory mode):", err);
-      throw err;
-    }
+    const { PGlite } = await import("@electric-sql/pglite");
+    const pg = new PGlite({
+      parsers: {
+        [OID_INT8]: Number,
+        [OID_DATE]: identity,
+        [OID_INTERVAL]: identity,
+      },
+    });
+    await pg.waitReady;
+    await pg.exec(
+      "create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())",
+    );
+    return pg;
   })().catch((err) => {
     globalRef.__pgliteInstance__ = undefined;
     throw err;
@@ -297,6 +292,7 @@ const globalBoot = globalThis as typeof globalThis & {
 if (typeof window === "undefined" && dbSource === "pglite") {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
-    console.warn("[db] PGLite bootstrap skipped or unavailable in this environment:", err?.message || err);
+    console.error("[db] PGLite bootstrap failed:", err);
+    throw err;
   });
 }

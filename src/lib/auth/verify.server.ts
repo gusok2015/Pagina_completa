@@ -77,40 +77,16 @@ export async function getSessionUser(
 export async function getAdminSessionUser(
   bearerToken?: string,
 ): Promise<AdminSessionUser | null> {
+  const request = getRequest();
+  if (!request) return null;
+  let headers = request.headers;
+  if (bearerToken) {
+    headers = new Headers(request.headers);
+    headers.set("Authorization", `Bearer ${bearerToken}`);
+  }
   try {
-    const request = getRequest();
-    if (!request) {
-      if (!databaseConfigured) {
-        return {
-          id: "admin-fallback",
-          name: "Administrador",
-          email: "admin@breakpointcreativa.com",
-          role: "admin",
-        };
-      }
-      return null;
-    }
-    let headers = request.headers;
-    if (bearerToken) {
-      headers = new Headers(request.headers);
-      headers.set("Authorization", `Bearer ${bearerToken}`);
-    }
-    const session = await auth.api.getSession({ headers }).catch((err) => {
-      console.warn("[auth] getSession safely bypassed or failed:", err?.message || err);
-      return null;
-    });
-
-    if (!session?.user) {
-      if (!databaseConfigured) {
-        return {
-          id: "admin-fallback",
-          name: "Administrador",
-          email: "admin@breakpointcreativa.com",
-          role: "admin",
-        };
-      }
-      return null;
-    }
+    const session = await auth.api.getSession({ headers });
+    if (!session?.user) return null;
     const role = (session.user as { role?: string }).role || "admin";
     return {
       id: session.user.id,
@@ -119,15 +95,7 @@ export async function getAdminSessionUser(
       role,
     };
   } catch (err) {
-    console.warn("[auth] getAdminSessionUser error:", err);
-    if (!databaseConfigured) {
-      return {
-        id: "admin-fallback",
-        name: "Administrador",
-        email: "admin@breakpointcreativa.com",
-        role: "admin",
-      };
-    }
+    console.warn("getSession error in getAdminSessionUser:", err);
     return null;
   }
 }
@@ -139,14 +107,6 @@ export async function getAdminSessionUser(
 export async function requireAdminSession(bearerToken?: string): Promise<AdminSessionUser> {
   const admin = await getAdminSessionUser(bearerToken);
   if (!admin) {
-    if (!databaseConfigured) {
-      return {
-        id: "admin-fallback",
-        name: "Administrador",
-        email: "admin@breakpointcreativa.com",
-        role: "admin",
-      };
-    }
     throw new UnauthorizedError();
   }
   if (admin.role !== "admin") {
