@@ -5,6 +5,7 @@ import {
   revokeCertificate,
   reactivateCertificate,
   updateCertificateDni,
+  resetCertificateVerifications,
   downloadCertificatePdfServerFn,
   formatArgentinaDateTime,
   formatArgentinaDate,
@@ -121,6 +122,27 @@ function AdminCertificateDetailPage() {
     }
   };
 
+  const handleResetVerifications = async () => {
+    if (
+      !confirm(
+        `¿Querés reiniciar las consultas del certificado ${certificate.code}?\n\nVolverá a estado EMITIDO y su contador de consultas quedará en 0.`,
+      )
+    ) {
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await resetCertificateVerifications({
+        data: { code: certificate.code },
+      });
+      await router.invalidate();
+    } catch (err) {
+      console.error("Error al reiniciar consultas:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleSaveDni = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsSavingDni(true);
@@ -205,6 +227,16 @@ function AdminCertificateDetailPage() {
             <span>🖨</span>
             <span>IMPRIMIR / VECTOR</span>
           </button>
+
+          {(certificate.verificationCount > 0 || certificate.status === "verified") && (
+            <button
+              disabled={isProcessing || isGeneratingPdf}
+              onClick={handleResetVerifications}
+              className="bg-amber-500/10 border border-amber-500/30 px-5 py-2.5 font-mono text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              REINICIAR CONSULTAS (0)
+            </button>
+          )}
 
           {certificate.status === "revoked" ? (
             <button

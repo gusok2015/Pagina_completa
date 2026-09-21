@@ -775,6 +775,54 @@ export const updateCertificateDni = createServerFn({ method: "POST" })
   });
 
 /**
+ * Reiniciar un certificado a estado 'issued' (emitido) y restablecer su contador de consultas a 0.
+ * Limpia first_verified_at, last_verified_at y elimina el historial de consultas de verificación.
+ */
+export const resetCertificateVerifications = createServerFn({ method: "POST" })
+  .validator((input: { code: string }) => ({
+    code: normalizeCertificateCode(input.code),
+  }))
+  .handler(async ({ data }): Promise<{ success: boolean; message: string }> => {
+    const { requireAdminSession } = await import("./auth/verify.server");
+    await requireAdminSession();
+
+    try {
+      const { getSql } = await import("./db");
+      const sql = await getSql();
+
+      await sql`
+        delete from certificate_verifications
+        where certificate_code = ${data.code}
+      `;
+
+      await sql`
+        update certificates
+        set 
+          status = 'issued',
+          verification_count = 0,
+          first_verified_at = null,
+          last_verified_at = null,
+          updated_at = now()
+        where code = ${data.code}
+      `;
+    } catch (err) {
+      console.warn("DB error when resetting verifications, updating fallback memory:", err);
+    }
+
+    if (INITIAL_CERTIFICATES[data.code]) {
+      const item = INITIAL_CERTIFICATES[data.code];
+      item.status = "issued";
+      item.verificationCount = 0;
+      item.firstVerifiedAt = null;
+      item.lastVerifiedAt = null;
+      item.updatedAt = new Date().toISOString();
+    }
+    delete IN_MEMORY_VERIFICATIONS[data.code];
+
+    return { success: true, message: `Certificado ${data.code} restablecido a EMITIDO con 0 consultas.` };
+  });
+
+/**
  * Obtener datos estructurados de un certificado para la generación de PDF.
  */
 async function getCertificateForPdf(code: string) {

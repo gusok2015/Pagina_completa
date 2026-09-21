@@ -6,7 +6,8 @@ import { authClient } from "@/lib/auth/client";
 export const Route = createFileRoute("/admin")({
   loader: async ({ location }) => {
     // Si la ruta actual es /admin/login no redirigir
-    if (location.pathname === "/admin/login") {
+    const cleanPath = location.pathname.replace(/\/+$/, "");
+    if (cleanPath === "/admin/login") {
       return { user: null };
     }
 

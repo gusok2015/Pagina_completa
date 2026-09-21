@@ -5,6 +5,7 @@ import {
   revokeCertificate,
   reactivateCertificate,
   updateCertificateDni,
+  resetCertificateVerifications,
   downloadCertificatePdfServerFn,
   downloadBatchCertificatesZipServerFn,
   formatArgentinaDateTime,
@@ -148,6 +149,27 @@ function AdminCertificatesPage() {
       await router.invalidate();
     } catch (err) {
       console.error("Error al reactivar:", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleResetVerifications = async (code: string) => {
+    if (
+      !confirm(
+        `¿Querés reiniciar las consultas del certificado ${code}?\n\nVolverá a estado EMITIDO y su contador de consultas quedará en 0.`,
+      )
+    ) {
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await resetCertificateVerifications({
+        data: { code },
+      });
+      await router.invalidate();
+    } catch (err) {
+      console.error("Error al reiniciar consultas:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -469,6 +491,16 @@ function AdminCertificatesPage() {
                         >
                           ↗
                         </a>
+                        {(cert.verificationCount > 0 || cert.status === "verified") && (
+                          <button
+                            disabled={isProcessing}
+                            onClick={() => handleResetVerifications(cert.code)}
+                            className="text-amber-400/90 hover:text-amber-300 transition-colors font-medium"
+                            title="Reiniciar a 0 consultas y cambiar a EMITIDO"
+                          >
+                            REINICIAR (0)
+                          </button>
+                        )}
                         {cert.status === "revoked" ? (
                           <button
                             disabled={isProcessing}
