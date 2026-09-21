@@ -905,19 +905,36 @@ export const downloadCertificatePdfServerFn = createServerFn({ method: "POST" })
       throw new Error(`Certificado ${data.code} no encontrado.`);
     }
 
-    const { generateSingleCertificatePdf, renderCompleteCertificateHtml } = await import(
-      "./certificates/pdf-generator.server"
-    );
-
     try {
-      const { buffer, filename } = await generateSingleCertificatePdf(cert);
-      return {
-        base64: buffer.toString("base64"),
-        filename,
-      };
-    } catch (browserError) {
-      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
-      const { html, filename } = renderCompleteCertificateHtml(cert);
+      const { generateSingleCertificatePdf, renderCompleteCertificateHtml } = await import(
+        "./certificates/pdf-generator.server"
+      );
+
+      try {
+        const { buffer, filename } = await generateSingleCertificatePdf(cert);
+        return {
+          base64: buffer.toString("base64"),
+          filename,
+        };
+      } catch (browserError) {
+        console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+        const { html, filename } = renderCompleteCertificateHtml(cert);
+        return {
+          html,
+          filename,
+          fallbackToClient: true,
+        };
+      }
+    } catch (generatorImportError) {
+      console.warn("No se pudo cargar generador server, usando fallback de plantilla HTML:", generatorImportError);
+      const { renderIsolatedCertificateHtml, generatePdfQrSvg, getCertificatePdfFilename } = await import(
+        "./certificates/pdf-template.ts"
+      );
+      const { TEMPLATE_BG_BASE64 } = await import("./certificates/template-bg-base64.ts");
+      const bgImageDataUri = TEMPLATE_BG_BASE64 ? `data:image/png;base64,${TEMPLATE_BG_BASE64}` : "";
+      const qrSvg = generatePdfQrSvg(cert.certificateCode);
+      const html = renderIsolatedCertificateHtml(cert, { bgImageDataUri, qrSvg });
+      const filename = getCertificatePdfFilename(cert);
       return {
         html,
         filename,
@@ -953,20 +970,42 @@ export const downloadBatchCertificatesZipServerFn = createServerFn({ method: "PO
       throw new Error("No se encontraron certificados válidos para generar.");
     }
 
-    const { generateCertificatesZip, renderCompleteCertificateHtml } = await import(
-      "./certificates/pdf-generator.server"
-    );
-
     try {
-      const { buffer, filename } = await generateCertificatesZip(certList);
-      return {
-        base64: buffer.toString("base64"),
-        filename,
-        count: certList.length,
-      };
-    } catch (browserError) {
-      console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
-      const items = certList.map((c) => renderCompleteCertificateHtml(c));
+      const { generateCertificatesZip, renderCompleteCertificateHtml } = await import(
+        "./certificates/pdf-generator.server"
+      );
+
+      try {
+        const { buffer, filename } = await generateCertificatesZip(certList);
+        return {
+          base64: buffer.toString("base64"),
+          filename,
+          count: certList.length,
+        };
+      } catch (browserError) {
+        console.warn("Playwright no disponible en este entorno, usando fallback cliente:", browserError);
+        const items = certList.map((c) => renderCompleteCertificateHtml(c));
+        const dateStr = new Date().toISOString().slice(0, 10);
+        return {
+          filename: `Certificados_Breakpoint_${dateStr}.zip`,
+          count: certList.length,
+          fallbackToClient: true,
+          items,
+        };
+      }
+    } catch (generatorImportError) {
+      console.warn("No se pudo cargar generador de ZIP server, usando fallback cliente:", generatorImportError);
+      const { renderIsolatedCertificateHtml, generatePdfQrSvg, getCertificatePdfFilename } = await import(
+        "./certificates/pdf-template.ts"
+      );
+      const { TEMPLATE_BG_BASE64 } = await import("./certificates/template-bg-base64.ts");
+      const bgImageDataUri = TEMPLATE_BG_BASE64 ? `data:image/png;base64,${TEMPLATE_BG_BASE64}` : "";
+      const items = certList.map((c) => {
+        const qrSvg = generatePdfQrSvg(c.certificateCode);
+        const html = renderIsolatedCertificateHtml(c, { bgImageDataUri, qrSvg });
+        const filename = getCertificatePdfFilename(c);
+        return { html, filename };
+      });
       const dateStr = new Date().toISOString().slice(0, 10);
       return {
         filename: `Certificados_Breakpoint_${dateStr}.zip`,
