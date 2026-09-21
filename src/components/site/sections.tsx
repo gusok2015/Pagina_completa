@@ -225,7 +225,7 @@ function FounderBlock({
         <p className="mt-2 font-mono text-xs tracking-label text-muted">{role}</p>
       </div>
       {image && (
-        <div className="size-28 shrink-0 overflow-hidden rounded-full border border-border/60 shadow-lg md:size-36">
+        <div className="w-32 h-36 shrink-0 overflow-hidden border border-border/60 shadow-lg md:w-40 md:h-44">
           <img src={image} alt={name} className="h-full w-full object-cover" />
         </div>
       )}
