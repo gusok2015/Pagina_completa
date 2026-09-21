@@ -25,14 +25,16 @@ export function triggerBlobDownload(blob: Blob, filename: string) {
 export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
-  iframe.style.left = "-99999px";
   iframe.style.top = "0";
-  iframe.style.width = "297mm";
-  iframe.style.height = "210mm";
+  iframe.style.left = "0";
+  iframe.style.width = "1123px";
+  iframe.style.height = "794px";
   iframe.style.border = "none";
   iframe.style.margin = "0";
   iframe.style.padding = "0";
-  iframe.style.overflow = "hidden";
+  iframe.style.opacity = "0.01";
+  iframe.style.pointerEvents = "none";
+  iframe.style.zIndex = "-9999";
   document.body.appendChild(iframe);
 
   try {
@@ -45,18 +47,16 @@ export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
 
     // Esperar a que carguen fuentes e imágenes
     if (doc.fonts) {
-      await doc.fonts.ready;
+      await doc.fonts.ready.catch(() => {});
     }
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, 650));
 
     const target = (doc.querySelector(".certificate-container") as HTMLElement) || doc.body;
-
-    const rect = target.getBoundingClientRect();
-    const targetWidth = Math.round(rect.width) || target.offsetWidth || 1123;
-    const targetHeight = Math.round(rect.height) || target.offsetHeight || 794;
+    const targetWidth = target.offsetWidth || 1123;
+    const targetHeight = target.offsetHeight || 794;
 
     const canvas = await html2canvas(target, {
-      scale: 3, // Ultra alta resolución ~300 DPI
+      scale: 2.5, // Alta resolución A4 ~300 DPI
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -83,7 +83,9 @@ export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
     pdf.addImage(imgData, "JPEG", 0, 0, 297, 210, undefined, "FAST");
     return pdf.output("blob");
   } finally {
-    document.body.removeChild(iframe);
+    if (iframe.parentNode) {
+      iframe.parentNode.removeChild(iframe);
+    }
   }
 }
 
@@ -92,7 +94,30 @@ export async function renderHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
  */
 export function openCertificatePrintDialog(htmlContent: string) {
   const printWindow = window.open("", "_blank");
-  if (!printWindow) return;
+  if (!printWindow) {
+    const printIframe = document.createElement("iframe");
+    printIframe.style.position = "fixed";
+    printIframe.style.right = "0";
+    printIframe.style.bottom = "0";
+    printIframe.style.width = "0";
+    printIframe.style.height = "0";
+    printIframe.style.border = "0";
+    document.body.appendChild(printIframe);
+    const doc = printIframe.contentDocument || printIframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+      setTimeout(() => {
+        printIframe.contentWindow?.focus();
+        printIframe.contentWindow?.print();
+        setTimeout(() => {
+          if (printIframe.parentNode) printIframe.parentNode.removeChild(printIframe);
+        }, 1000);
+      }, 500);
+    }
+    return;
+  }
   printWindow.document.open();
   printWindow.document.write(htmlContent);
   printWindow.document.close();
@@ -116,9 +141,15 @@ export async function handleCertificateDownloadResult(result: CertificateDownloa
   }
 
   if (result.html) {
-    const pdfBlob = await renderHtmlToPdfBlob(result.html);
-    triggerBlobDownload(pdfBlob, result.filename);
-    return;
+    try {
+      const pdfBlob = await renderHtmlToPdfBlob(result.html);
+      triggerBlobDownload(pdfBlob, result.filename);
+      return;
+    } catch (renderError) {
+      console.warn("Fallo el renderizado PDF en cliente, abriendo ventana de impresion vector:", renderError);
+      openCertificatePrintDialog(result.html);
+      return;
+    }
   }
 
   throw new Error("No se recibieron datos de PDF ni HTML del certificado.");
@@ -136,8 +167,13 @@ export async function handleBatchZipDownloadResult(result: BatchCertificatesDown
   if (result.items && result.items.length > 0) {
     const zip = new JSZip();
     for (const item of result.items) {
-      const pdfBlob = await renderHtmlToPdfBlob(item.html);
-      zip.file(item.filename, pdfBlob);
+      try {
+        const pdfBlob = await renderHtmlToPdfBlob(item.html);
+        zip.file(item.filename, pdfBlob);
+      } catch (err) {
+        console.warn(`Fallback HTML para item ${item.filename}:`, err);
+        zip.file(item.filename.replace(/\.pdf$/i, ".html"), item.html);
+      }
     }
     const zipBlob = await zip.generateAsync({ type: "blob" });
     triggerBlobDownload(zipBlob, result.filename);
