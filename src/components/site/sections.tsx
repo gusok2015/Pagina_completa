@@ -181,8 +181,19 @@ export function Founders() {
         <p className="font-mono text-xs tracking-label text-muted">03 — Fundadores</p>
       </div>
       <div className="grid border-t border-border md:grid-cols-2">
-        <FounderBlock initials="C.R." name="Carolina Riveros" role="Cofundadora" />
-        <FounderBlock initials="G.R." name="Gustavo Rojas" role="Cofundador" last />
+        <FounderBlock
+          initials="C.R."
+          name="Carolina Riveros"
+          role="Cofundadora"
+          image="/team/carolina-riveros.png"
+        />
+        <FounderBlock
+          initials="G.R."
+          name="Gustavo Rojas"
+          role="Cofundador"
+          image="/team/gustavo-rojas.png"
+          last
+        />
       </div>
     </section>
   );
@@ -192,23 +203,32 @@ function FounderBlock({
   initials,
   name,
   role,
+  image,
   last,
 }: {
   initials: string;
   name: string;
   role: string;
+  image?: string;
   last?: boolean;
 }) {
   return (
     <article
       className={cnBorder(
-        "px-5 py-12 md:px-8 md:py-16",
+        "flex items-center justify-between gap-6 px-5 py-12 md:px-8 md:py-16",
         !last && "border-b border-border md:border-b-0 md:border-r",
       )}
     >
-      <p className="font-display text-stat italic text-primary">{initials}</p>
-      <h3 className="mt-8 font-display text-3xl">{name}</h3>
-      <p className="mt-2 font-mono text-xs tracking-label text-muted">{role}</p>
+      <div>
+        <p className="font-display text-stat italic text-primary">{initials}</p>
+        <h3 className="mt-8 font-display text-3xl">{name}</h3>
+        <p className="mt-2 font-mono text-xs tracking-label text-muted">{role}</p>
+      </div>
+      {image && (
+        <div className="size-28 shrink-0 overflow-hidden rounded-full border border-border/60 shadow-lg md:size-36">
+          <img src={image} alt={name} className="h-full w-full object-cover" />
+        </div>
+      )}
     </article>
   );
 }
